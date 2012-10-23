@@ -1,0 +1,13 @@
+project.environment = production
+project.db.host = host-goeshere
+project.db.user = dbuser-goeshere
+project.db.password = password-goeshere
+project.db.name = dbname-goeshere
+project.db.prefix = wp_
+project.git.tag = 0.0.1
+project.git.url = git@github.com:starbunks/bowdoni.git
+project.remote.user = bowdoni
+project.remote.url = bowdoni.com
+project.remote.deploy-directory = /home/bowdoni/bowdoni.com/apps/wordpress/deploy
+project.ssh.key = ~/.ssh/id_rsa.pub
+project.site.url = http://bowdoni.com

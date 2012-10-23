@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="Frontburnr web site." basedir="." default="">
+    <property file="build.properties" />
+    <property name="builddir" value="./build" />
+    <property name="pubkey" value="${project.ssh.key}" />
+    <property name="site_url" value="${project.site.url}" />
+    <property name="environment" value="${project.environment}" />
+    <property name="db.host" value="${project.db.host}" />
+    <property name="db.name" value="${project.db.name}" />
+    <property name="db.user" value="${project.db.user}" />
+    <property name="db.password" value="${project.db.password}" />
+    <property name="db.prefix" value="${project.db.prefix}" />
+    <property name="git.tag" value="${project.git.tag}" />
+    <property name="git.url" value="${project.git.url}" />
+    <property name="remote.user" value="${project.remote.user}" />
+    <property name="remote.url" value="${project.remote.url}" />
+    <property name="remote.deploy-directory" value="${project.remote.deploy-directory}" />
+    <resolvepath propertyName="project_path" file="." />
+
+    <target name="vagrant:install" description="This will setup a wordpress site that duplicates production.">
+        <echo msg="Preparing vagrant installation of the frontburnr website." />
+        <echo msg="Resetting phing properties for vagrant environment." />
+        <property override="true" name="db.user" value="root" />
+        <property override="true" name="db.name" value="frontburnr_wp" />
+        <property override="true" name="db.password" value="root" />
+        <property override="true" name="db.prefix" value="wp_" />
+        <property override="true" name="site_url" value="http://frontburnr" />
+        <phingcall target="local:prepare" />
+        <echo msg="Creating the database only if it doesn't exist." />
+        <exec passthru="1" command="mysql -u${db.user} -p${db.password} -e 'CREATE DATABASE IF NOT EXISTS `${db.name}`;'" />
+        <echo msg="Vagrant wordpress site is now ready. You now need to add an entry to your /etc/hosts file for host 'frontburnr 33.33.33.10'. Also, if this is the first vagrant boot then the wordpress site will promptly take you through it's own wordpress installation." />
+    </target>
+    <target name="mirror-production" description="Mirrors production to this local site. Be sure build.properties is setup for local.">
+        <propertyprompt propertyName="prod.db.name" promptText="DB name" defaultValue="frontburnr_wp" />
+        <propertyprompt propertyName="prod.db.user" promptText="DB user" defaultValue="frontburnrweb" />
+        <propertyprompt propertyName="prod.db.password" promptText="DB password" defaultValue="" />
+        <echo msg="Dumping database into local sql file." />
+        <exec passthru="1" command="ssh -C frontburnrweb@frontburnr.com 'mysqldump -u${prod.db.user} -p${prod.db.password} ${prod.db.name}' &gt; dump.sql" />
+        <exec passthru="1" command="sed -i 's/http:\/\/frontburnr.com/http:\/\/frontburnr/g' dump.sql" />
+        <echo msg="Recreating local database and populating data." />
+        <exec passthru="1" command="mysql -u${db.user} -p${db.password} -e 'drop database if exists ${db.name};create database ${db.name};' -D${db.name}" />
+        <exec passthru="1" command="mysql -u${db.user} -p${db.password} ${db.name} &lt; dump.sql" />
+        <echo msg="Copying the uploads folder now." />
+        <exec passthru="1" command="scp -r -i ${pubkey} ${remote.user}@${remote.url}:/home/${remote.user}/apps/wordpress/uploads wordpress/wp-content/" />
+    </target>
+    <target name="local:prepare" description="Create symlinks, copy configs etc.">
+        <echo msg="Copying config file for wordress." />
+        <copy file="./wordpress/wp-config.php-dist" tofile="./wordpress/core/wp-config.php" overwrite="true">
+            <filterchain>
+                <replacetokens>
+                    <token key="DB_USER" value="${db.user}" />
+                    <token key="DB_HOST" value="${db.host}" />
+                    <token key="DB_NAME" value="${db.name}" />
+                    <token key="DB_PASSWORD" value="${db.password}" />
+                    <token key="TABLE_PREFIX" value="${db.prefix}" />
+                    <token key="SITE_URL" value="${site_url}" />
+                </replacetokens>
+            </filterchain>
+        </copy>
+        <echo msg="Symlinking wp-content folder." />
+        <symlink target="${project_path}/wordpress/wp-content" link="${project_path}/wordpress/core/wp-content" overwrite="true" />
+    </target>
+    <target name="clean" description="Cleans the build folder.">
+        <echo msg="Cleaning build directory." />
+        <delete dir="${builddir}" />
+        <delete>
+            <fileset dir=".">
+                <include name="release-*.tar.gz" />
+            </fileset>
+        </delete>
+    </target>
+    <target name="prepare" description="Creates the build folder.">
+        <echo msg="Preparing build directory." />
+        <mkdir dir="${builddir}" />
+    </target>
+    <target name="checkout" depends="prepare" description="Checkout from git repository into the build folder.">
+        <if>
+            <or>
+                <not>
+                    <isset property="git.tag" />
+                </not>
+                <equals trim="true" arg1="${git.tag}" arg2="" />
+            </or>
+            <then>
+                <fail message="A git.tag must be set within the build.properties file" />
+            </then>
+        </if>
+        <echo msg="Checkout of tag ${git.tag}..." />
+        <exec passthru="1" command="git clone -q --recursive ${git.url} ${builddir}" />
+        <exec passthru="1" command="cd ${builddir} &amp;&amp; git checkout -q ${git.tag} &amp;&amp; git submodule update -q --recursive" />
+        <copy file="${builddir}/wordpress/wp-config.php-dist" tofile="${builddir}/wordpress/core/wp-config.php" overwrite="true">
+            <filterchain>
+                <replacetokens>
+                    <token key="DB_USER" value="${db.user}" />
+                    <token key="DB_HOST" value="${db.host}" />
+                    <token key="DB_NAME" value="${db.name}" />
+                    <token key="DB_PASSWORD" value="${db.password}" />
+                    <token key="TABLE_PREFIX" value="${db.prefix}" />
+                    <token key="SITE_URL" value="${site_url}" />
+                </replacetokens>
+            </filterchain>
+        </copy>
+    </target>
+    <target name="archive" description="Tar up the build folder contents.">
+        <tar destfile="release-${git.tag}.tar.gz" compression="gzip" basedir="${builddir}" />
+    </target>
+    <target name="remote:copy" description="Copies archive file over to the remote server.">
+        <echo msg="Copying archive file to remote server." />
+        <echo msg="scp -i ${pubkey} release-${git.tag}.tar.gz ${remote.user}@${remote.url}:${remote.deploy-directory}/release-${git.tag}.tar.gz" />
+        <exec passthru="1" command="scp -i ${pubkey} release-${git.tag}.tar.gz ${remote.user}@${remote.url}:${remote.deploy-directory}/release-${git.tag}.tar.gz" />
+    </target>
+    <target name="remote:install" description="Execute install on the remote.">
+        <echo msg="Installing application on remote server." />
+        <exec passthru="1" command="ssh -i ${pubkey} ${remote.user}@${remote.url} 'cd ${remote.deploy-directory} &amp;&amp; rm -rf ${git.tag} &amp;&amp; mkdir ${git.tag} &amp;&amp; tar -xvzf release-${git.tag}.tar.gz -C ${git.tag} --exclude-vcs --overwrite &amp;&amp; rm -rf release-${git.tag}.tar.gz &amp;&amp; rm -f release-${git.tag}.tar.gz ../current &amp;&amp; ln -s ${remote.deploy-directory}/${git.tag} ${remote.deploy-directory}/../current &amp;&amp; ln -s ${remote.deploy-directory}/${git.tag}/wordpress/wp-content ${remote.deploy-directory}/${git.tag}/wordpress/core/wp-content &amp;&amp; WP_UPLOADS_PATH=$(readlink -f ${remote.deploy-directory}/${git.tag}/../../uploads); ln -s $WP_UPLOADS_PATH ${remote.deploy-directory}/${git.tag}/wordpress/wp-content/'" />
+    </target>
+    <target name="deploy" description="Deploys package to a remote server.">
+        <phingcall target="prepare" />
+        <phingcall target="checkout" />
+        <phingcall target="archive" />
+        <phingcall target="remote:copy" />
+        <phingcall target="remote:install" />
+    </target>
+
+</project>
