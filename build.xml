@@ -103,7 +103,7 @@
     </target>
     <target name="remote:install" description="Execute install on the remote.">
         <echo msg="Installing application on remote server." />
-        <exec passthru="1" command="ssh -i ${pubkey} ${remote.user}@${remote.url} 'cd ${remote.deploy-directory} &amp;&amp; rm -rf ${git.tag} &amp;&amp; mkdir ${git.tag} &amp;&amp; tar -xvzf release-${git.tag}.tar.gz -C ${git.tag} --exclude-vcs --overwrite &amp;&amp; rm -rf release-${git.tag}.tar.gz &amp;&amp; rm -f release-${git.tag}.tar.gz ../current &amp;&amp; ln -s ${remote.deploy-directory}/${git.tag} ${remote.deploy-directory}/../current &amp;&amp; ln -s ${remote.deploy-directory}/${git.tag}/wordpress/wp-content ${remote.deploy-directory}/${git.tag}/wordpress/core/wp-content &amp;&amp; WP_UPLOADS_PATH=$(readlink -f ${remote.deploy-directory}/${git.tag}/../../uploads); ln -s $WP_UPLOADS_PATH ${remote.deploy-directory}/${git.tag}/wordpress/wp-content/'" />
+        <exec passthru="1" command="ssh -i ${pubkey} ${remote.user}@${remote.url} 'cd ${remote.deploy-directory} &amp;&amp; rm -rf ${git.tag} &amp;&amp; mkdir ${git.tag} &amp;&amp; tar -xvzf release-${git.tag}.tar.gz -C ${git.tag} --exclude-vcs --overwrite &amp;&amp; rm -rf release-${git.tag}.tar.gz &amp;&amp; rm -f release-${git.tag}.tar.gz ../current &amp;&amp; ln -s ${remote.deploy-directory}/${git.tag} ${remote.deploy-directory}/../current &amp;&amp; WP_UPLOADS_PATH=$(readlink -f ${remote.deploy-directory}/${git.tag}/../../uploads); ln -s $WP_UPLOADS_PATH ${remote.deploy-directory}/${git.tag}/wordpress/wp-content/'" />
     </target>
 
     <target name="deploy" description="Deploys package to a remote server.">
